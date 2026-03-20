@@ -718,7 +718,9 @@ class CharmCryptoProvider(BaseProvider):
 def get_crypto_provider(provider_name: str) -> CryptoProvider:
     if provider_name == "charm":
         try:
-            return CharmCryptoProvider()
+            from app.crypto.charm_provider import CharmCryptoProvider as DedicatedCharmProvider
+
+            return DedicatedCharmProvider()
         except RuntimeError:
             return MockCryptoProvider()
     return MockCryptoProvider()
