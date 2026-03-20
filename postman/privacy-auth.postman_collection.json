@@ -1,0 +1,52 @@
+{
+  "info": {
+    "name": "Privacy Auth API",
+    "_postman_id": "0f00f7e7-d9cc-4e0d-b52b-c90000000001",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Admin Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/admin/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@campus.local\",\n  \"password\": \"secret123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Company Register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/company/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Amazon Campus\",\n  \"email\": \"ops@amazon-campus.local\",\n  \"password\": \"secret123\",\n  \"metadata\": {\"region\": \"north\"}\n}"
+        }
+      }
+    },
+    {
+      "name": "Gate Verify",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/gate/verify",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"gate_id\": \"gate-id\",\n  \"gate_nonce\": \"issued-gate-nonce\",\n  \"received_nonce\": \"issued-gate-nonce\",\n  \"timestamp\": \"2026-03-20T12:00:00Z\",\n  \"qr_data\": {}\n}"
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/api/v1"
+    }
+  ]
+}
+
