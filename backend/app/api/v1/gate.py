@@ -10,11 +10,12 @@ from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.entities import Company, CompanyPublicKey, Gate, NonceTracking, RevocationList
+from app.repositories.gate_repo import GateRepository
 from app.schemas.auth import LoginRequest
 from app.schemas.common import MessageResponse, StatusResponse, TokenResponse
 from app.schemas.gate import GateRegisterRequest, NonceRequest, SyncRequest, VerifyRequest
+from app.services.verification_service import VerificationService
 from app.services.auth import issue_login_cookie, validate_password
-from app.services.verification import verify_access
 
 router = APIRouter(prefix="/gate", tags=["gate"])
 settings = get_settings()
@@ -62,16 +63,8 @@ async def issue_nonce(
         raise HTTPException(status_code=403, detail="Gate mismatch")
     if gate.status != "approved":
         raise HTTPException(status_code=403, detail=f"Gate is {gate.status}")
-    nonce = secrets.token_urlsafe(16)
-    db.add(
-        NonceTracking(
-            gate_id=gate.id,
-            nonce=nonce,
-            expires_at=datetime.now(UTC) + timedelta(seconds=settings.nonce_ttl_seconds),
-        )
-    )
-    await db.commit()
-    return {"gate_id": gate.id, "nonce": nonce, "expires_at": datetime.now(UTC) + timedelta(seconds=settings.nonce_ttl_seconds)}
+    nonce_record = await GateRepository(db).create_nonce(gate.id, settings.nonce_ttl_seconds)
+    return {"gate_id": gate.id, "nonce": nonce_record.nonce, "expires_at": nonce_record.expires_at}
 
 
 @router.post("/verify")
@@ -84,8 +77,7 @@ async def verify_gate_access(
         raise HTTPException(status_code=403, detail="Gate mismatch")
     if gate.status != "approved":
         raise HTTPException(status_code=403, detail=f"Gate is {gate.status}")
-    return await verify_access(
-        db,
+    return await VerificationService(db).verify(
         qr_data=payload.qr_data,
         gate_id=payload.gate_id,
         gate_nonce=payload.gate_nonce,

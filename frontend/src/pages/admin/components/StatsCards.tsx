@@ -1,11 +1,8 @@
-const stats = [
-  { label: "Pending Companies", value: "07" },
-  { label: "Active Gates", value: "12" },
-  { label: "Daily Verifications", value: "1,248" },
-  { label: "Replay Blocks", value: "03" }
-];
+type Props = {
+  stats: Array<{ label: string; value: string | number }>;
+};
 
-export function StatsCards() {
+export function StatsCards({ stats }: Props) {
   return (
     <div className="grid gap-4 md:grid-cols-4">
       {stats.map((stat) => (
@@ -17,4 +14,3 @@ export function StatsCards() {
     </div>
   );
 }
-

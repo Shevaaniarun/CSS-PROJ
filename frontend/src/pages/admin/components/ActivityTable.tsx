@@ -1,10 +1,17 @@
-const rows = [
-  ["08:42", "North Gate", "Amazon rider", "Granted"],
-  ["08:45", "West Gate", "Swiggy rider", "Denied: replay"],
-  ["08:50", "South Gate", "Blinkit rider", "Granted"]
-];
+type Row = {
+  id: string;
+  created_at: string;
+  gate_id: string | null;
+  worker_id: string | null;
+  result: string;
+  reason: string | null;
+};
 
-export function ActivityTable() {
+type Props = {
+  rows: Row[];
+};
+
+export function ActivityTable({ rows }: Props) {
   return (
     <div className="panel overflow-hidden">
       <h3 className="mb-4 text-lg font-semibold">Recent Access Attempts</h3>
@@ -19,10 +26,14 @@ export function ActivityTable() {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.join("-")} className="border-t border-black/10">
-              {row.map((value) => (
-                <td key={value} className="py-3">{value}</td>
-              ))}
+            <tr key={row.id} className="border-t border-black/10">
+              <td className="py-3">{new Date(row.created_at).toLocaleTimeString()}</td>
+              <td className="py-3">{row.gate_id ?? "Unknown gate"}</td>
+              <td className="py-3">{row.worker_id ?? "Worker hidden"}</td>
+              <td className="py-3">
+                {row.result}
+                {row.reason ? `: ${row.reason}` : ""}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -30,4 +41,3 @@ export function ActivityTable() {
     </div>
   );
 }
-

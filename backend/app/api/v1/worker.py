@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_worker
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.models.entities import Company, CompanyPublicKey, Credential, NonceTracking, Pseudonym, Worker
+from app.models.entities import AccessLog, Company, CompanyPublicKey, Credential, NonceTracking, Pseudonym, Worker
 from app.schemas.common import MessageResponse, TokenResponse
 from app.schemas.worker import PseudonymGenerateRequest, VerifyStatusRequest, WorkerAuthRequest
 from app.services.auth import issue_login_cookie, validate_password
@@ -15,6 +15,38 @@ from app.services.crypto_service import generate_pseudonym
 
 router = APIRouter(prefix="/worker", tags=["worker"])
 settings = get_settings()
+
+
+def _normalize_attribute_name(attribute: str) -> str:
+    return attribute.split(":", 1)[0].strip()
+
+
+def _normalize_attribute_list(attributes: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for attribute in attributes:
+        key = _normalize_attribute_name(attribute)
+        if key and key not in normalized:
+            normalized.append(key)
+    return normalized
+
+
+def _normalize_attribute_map(attributes: dict[str, int]) -> dict[str, int]:
+    normalized: dict[str, int] = {}
+    for attribute, value in attributes.items():
+        key = _normalize_attribute_name(attribute)
+        if key:
+            normalized[key] = value
+    return normalized
+
+
+def _normalize_access_tree(policy: dict) -> dict:
+    if not policy:
+        return {}
+    if policy.get("type") == "leaf":
+        return {**policy, "attribute": _normalize_attribute_name(policy.get("attribute", ""))}
+    if "children" in policy:
+        return {**policy, "children": [_normalize_access_tree(child) for child in policy.get("children", [])]}
+    return policy
 
 
 @router.post("/auth", response_model=TokenResponse)
@@ -66,10 +98,10 @@ async def create_pseudonym(
     qr_data = generate_pseudonym(
         credential.credential_blob,
         key_bundle.public_parameters,
-        payload.own_attributes,
-        payload.delegated_attributes,
-        payload.simulated_attributes,
-        payload.access_tree,
+        _normalize_attribute_list(payload.own_attributes),
+        _normalize_attribute_map(payload.delegated_attributes),
+        _normalize_attribute_map(payload.simulated_attributes),
+        _normalize_access_tree(payload.access_tree),
         {
             **payload.message,
             "nonce": payload.gate_nonce,
@@ -121,3 +153,23 @@ async def verify_status(
     if not pseudonym:
         raise HTTPException(status_code=404, detail="Pseudonym not found")
     return MessageResponse(message=pseudonym.status)
+
+
+@router.get("/history")
+async def worker_history(
+    db: AsyncSession = Depends(get_db),
+    worker: Worker = Depends(require_worker),
+) -> list[dict]:
+    logs = await db.scalars(
+        select(AccessLog).where(AccessLog.worker_id == worker.id).order_by(AccessLog.created_at.desc()).limit(100)
+    )
+    return [
+        {
+            "id": log.id,
+            "result": log.result,
+            "reason": log.reason,
+            "gate_id": log.gate_id,
+            "created_at": log.created_at,
+        }
+        for log in logs
+    ]

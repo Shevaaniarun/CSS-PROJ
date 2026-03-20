@@ -19,6 +19,15 @@ router = APIRouter(prefix="/company", tags=["company"])
 settings = get_settings()
 
 
+def _normalize_crypto_attributes(attributes: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for attribute in attributes:
+        key = attribute.split(":", 1)[0].strip()
+        if key and key not in normalized:
+            normalized.append(key)
+    return normalized
+
+
 @router.post("/register", response_model=MessageResponse)
 async def register_company(payload: CompanyRegisterRequest, db: AsyncSession = Depends(get_db)) -> MessageResponse:
     company = Company(
@@ -33,6 +42,7 @@ async def register_company(payload: CompanyRegisterRequest, db: AsyncSession = D
         },
     )
     db.add(company)
+    await db.flush()
     public_params, secret_keys = generate_company_key_bundle(["company", "role", "campus_access"])
     db.add(
         CompanyPublicKey(
@@ -88,6 +98,51 @@ async def list_workers(
     return [WorkerSummary.model_validate(worker) for worker in workers]
 
 
+@router.get("/credentials")
+async def list_credentials(
+    db: AsyncSession = Depends(get_db), company: Company = Depends(require_company)
+) -> list[dict]:
+    credentials = await db.scalars(select(Credential).where(Credential.company_id == company.id).order_by(Credential.created_at.desc()))
+    items: list[dict] = []
+    for credential in credentials:
+        worker = await db.scalar(select(Worker).where(Worker.id == credential.worker_id))
+        items.append(
+            {
+                "id": credential.id,
+                "worker_id": credential.worker_id,
+                "worker_name": worker.full_name if worker else None,
+                "external_worker_id": worker.external_worker_id if worker else None,
+                "expires_at": credential.expires_at,
+                "created_at": credential.created_at,
+                "credential_blob": credential.credential_blob,
+            }
+        )
+    return items
+
+
+@router.get("/credentials/{credential_id}")
+async def get_credential_detail(
+    credential_id: str,
+    db: AsyncSession = Depends(get_db),
+    company: Company = Depends(require_company),
+) -> dict:
+    credential = await db.scalar(
+        select(Credential).where(Credential.id == credential_id, Credential.company_id == company.id)
+    )
+    if not credential:
+        raise HTTPException(status_code=404, detail="Credential not found")
+    worker = await db.scalar(select(Worker).where(Worker.id == credential.worker_id))
+    return {
+        "id": credential.id,
+        "worker_id": credential.worker_id,
+        "worker_name": worker.full_name if worker else None,
+        "external_worker_id": worker.external_worker_id if worker else None,
+        "expires_at": credential.expires_at,
+        "created_at": credential.created_at,
+        "credential_blob": credential.credential_blob,
+    }
+
+
 @router.post("/credentials/issue", response_model=MessageResponse)
 async def issue_worker_credential(
     payload: CredentialIssueRequest,
@@ -104,7 +159,7 @@ async def issue_worker_credential(
         raise HTTPException(status_code=400, detail="Missing company key bundle")
     credential_blob = issue_credential(
         worker.id,
-        payload.attributes,
+        _normalize_crypto_attributes(payload.attributes),
         key_bundle.public_parameters["secret_keys"],
         key_bundle.public_parameters,
     )
@@ -112,6 +167,7 @@ async def issue_worker_credential(
     credential_blob["company"] = company.name
     credential_blob["worker_id"] = worker.external_worker_id
     credential_blob["expiry"] = payload.expires_at.astimezone(UTC).isoformat()
+    credential_blob["issued_attributes"] = payload.attributes
     credential = Credential(
         worker_id=worker.id,
         company_id=company.id,

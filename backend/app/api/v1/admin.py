@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
@@ -167,6 +167,26 @@ async def access_logs(
         }
         for log in logs
     ]
+
+
+@router.get("/stats")
+async def stats(
+    db: AsyncSession = Depends(get_db), _: Admin = Depends(require_admin)
+) -> dict:
+    total_attempts = await db.scalar(select(func.count(AccessLog.id)))
+    granted = await db.scalar(select(func.count(AccessLog.id)).where(AccessLog.result == "grant"))
+    denied = await db.scalar(select(func.count(AccessLog.id)).where(AccessLog.result == "deny"))
+    pending_companies_count = await db.scalar(
+        select(func.count(Company.id)).where(Company.status == "pending")
+    )
+    pending_gates_count = await db.scalar(select(func.count(Gate.id)).where(Gate.status == "pending"))
+    return {
+        "total_attempts": total_attempts or 0,
+        "granted": granted or 0,
+        "denied": denied or 0,
+        "pending_companies": pending_companies_count or 0,
+        "pending_gates": pending_gates_count or 0,
+    }
 
 
 @router.get("/audit-logs")

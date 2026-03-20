@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from app.crypto.accesstree import AccessTree as PolicyAccessTree
+
 try:
     from charm.toolbox.hash_module import Hash  # type: ignore
     from charm.toolbox.pairinggroup import G1, GT, ZR, PairingGroup, pair  # type: ignore
@@ -79,65 +81,6 @@ class CryptoProvider(Protocol):
         credential: dict,
         public_params: PublicParameters,
     ) -> bool: ...
-
-
-class AccessTree:
-    """Small access-tree helper for AND/OR/k-of-n policies."""
-
-    def __init__(self, tree: dict | None) -> None:
-        self.tree = tree or {}
-
-    def required_attributes(self, attributes: set[str]) -> set[str]:
-        if not self.tree:
-            return attributes
-        return self._required(self.tree, attributes)
-
-    def is_satisfied(self, attributes: set[str]) -> bool:
-        if not self.tree:
-            return True
-        return self._satisfied(self.tree, attributes)
-
-    def digest(self) -> str:
-        return _hash_text(_canonical_json(self.tree))
-
-    def non_delegatable(self) -> set[str]:
-        values = self.tree.get("non_delegatable", [])
-        return set(values if isinstance(values, list) else [])
-
-    def _required(self, node: dict, attributes: set[str]) -> set[str]:
-        node_type = node.get("type", "leaf")
-        if node_type == "leaf":
-            attr = node.get("attribute")
-            return {attr} if attr in attributes else set()
-        children = [child for child in node.get("children", []) if isinstance(child, dict)]
-        child_sets = [self._required(child, attributes) for child in children]
-        if node_type == "and":
-            return set().union(*child_sets) if all(child_sets) else set()
-        if node_type == "or":
-            valid_sets = [child for child in child_sets if child]
-            return min(valid_sets, key=len) if valid_sets else set()
-        threshold = int(node.get("threshold", len(children)))
-        valid_sets = [child for child in child_sets if child]
-        if len(valid_sets) < threshold:
-            return set()
-        valid_sets.sort(key=len)
-        result: set[str] = set()
-        for child in valid_sets[:threshold]:
-            result.update(child)
-        return result
-
-    def _satisfied(self, node: dict, attributes: set[str]) -> bool:
-        node_type = node.get("type", "leaf")
-        if node_type == "leaf":
-            return node.get("attribute") in attributes
-        children = [child for child in node.get("children", []) if isinstance(child, dict)]
-        if node_type == "and":
-            return all(self._satisfied(child, attributes) for child in children)
-        if node_type == "or":
-            return any(self._satisfied(child, attributes) for child in children)
-        threshold = int(node.get("threshold", len(children)))
-        satisfied = sum(1 for child in children if self._satisfied(child, attributes))
-        return satisfied >= threshold
 
 
 class BaseProvider:
@@ -223,6 +166,27 @@ class BaseProvider:
 
     def _zero_scalar(self) -> Any:
         return self._deserialize_scalar("0")
+
+    def _scalar_from_int(self, value: int) -> Any:
+        return self._deserialize_scalar(str(value))
+
+    def _scalar_to_int(self, value: Any) -> int:
+        return int(str(value))
+
+    def _load_policy_tree(self, access_tree: dict) -> PolicyAccessTree:
+        tree = PolicyAccessTree()
+        if access_tree:
+            tree.build_from_policy(access_tree)
+        return tree
+
+    def _pick_required_attributes(self, tree: PolicyAccessTree, available_attrs: set[str]) -> set[str]:
+        if not tree.root:
+            return available_attrs
+        minimal_sets = tree.get_minimal_qualified_sets()
+        matching = [item for item in minimal_sets if item.issubset(available_attrs)]
+        if matching:
+            return min(matching, key=len)
+        return available_attrs
 
     def keygen(self, attributes: list[str]) -> tuple[PublicParameters, dict[str, str], dict[str, str]]:
         p = self._generator_p()
@@ -335,14 +299,14 @@ class BaseProvider:
         access_tree: dict,
         public_params: PublicParameters,
     ) -> dict:
-        tree = AccessTree(access_tree)
+        policy_tree = self._load_policy_tree(access_tree)
         available_attrs = set(pseudonym["attributes"])
-        if not tree.is_satisfied(available_attrs):
+        if access_tree and not policy_tree.evaluate(available_attrs):
             raise ValueError("Attributes do not satisfy the access tree")
 
-        required_attrs = tree.required_attributes(available_attrs)
-        policy_digest = tree.digest()
-        non_delegatable = tree.non_delegatable()
+        required_attrs = self._pick_required_attributes(policy_tree, available_attrs)
+        policy_digest = _hash_text(_canonical_json(access_tree or {}))
+        non_delegatable = set((access_tree or {}).get("non_delegatable", []))
 
         p = self._deserialize_g1(public_params.generator_p)
         g = self._deserialize_gt(public_params.generator_g)
@@ -382,7 +346,7 @@ class BaseProvider:
         y1 = self._mul_gt(self._pow_gt(h, gamma), self._pow_gt(g, mu_plus_mu_prime))
         y2 = self._mul_gt(self._pow_gt(h, delta), self._pow_gt(g, mu_prime))
 
-        challenge_input = _canonical_json(
+        provisional_input = _canonical_json(
             {
                 "pu": pseudonym["pu"],
                 "pa": pseudonym["pa"],
@@ -398,16 +362,18 @@ class BaseProvider:
                 "policy": policy_digest,
             }
         )
-        c = self._hash_to_scalar(challenge_input)
+        c_int = int(hashlib.sha256(provisional_input.encode("utf-8")).hexdigest(), 16) % policy_tree.prime_modulus
+        c = self._scalar_from_int(c_int)
 
-        c_i: dict[str, Any] = {}
-        for attribute in pseudonym["pa"]:
-            if attribute in required_attrs:
-                c_i[attribute] = self._hash_to_scalar(
-                    f"{self._serialize_scalar(c)}|{attribute}|{policy_digest}"
-                )
-            else:
-                c_i[attribute] = self._zero_scalar()
+        share_map = policy_tree.distribute_secrets(c_int) if access_tree else {}
+        c_i_ints = {
+            attribute: share_map[attribute] if attribute in required_attrs else 0
+            for attribute in pseudonym["pa"]
+        }
+        c_i: dict[str, Any] = {
+            attribute: self._scalar_from_int(value)
+            for attribute, value in c_i_ints.items()
+        }
 
         s1 = self._add_scalar(r1, self._mul_scalar(mu_plus_mu_prime, c))
         s2_i: dict[str, str] = {}
@@ -445,6 +411,7 @@ class BaseProvider:
             "y2": self._serialize_gt(y2),
             "policy_digest": policy_digest,
             "required_attributes": sorted(required_attrs),
+            "c_int": c_int,
             "timestamp": datetime.now(UTC).isoformat(),
         }
 
@@ -456,14 +423,15 @@ class BaseProvider:
         access_tree: dict,
         public_params: PublicParameters,
     ) -> bool:
-        tree = AccessTree(access_tree)
+        policy_tree = self._load_policy_tree(access_tree)
         available_attrs = set(pseudonym["attributes"])
-        if not tree.is_satisfied(available_attrs):
+        if access_tree and not policy_tree.evaluate(available_attrs):
             return False
         required_attrs = set(signature.get("required_attributes", []))
         if not required_attrs.issubset(available_attrs):
             return False
-        if signature.get("policy_digest") != tree.digest():
+        policy_digest = _hash_text(_canonical_json(access_tree or {}))
+        if signature.get("policy_digest") != policy_digest:
             return False
 
         p = self._deserialize_g1(public_params.generator_p)
@@ -495,7 +463,8 @@ class BaseProvider:
         )
 
         computed_t4_i: dict[str, str] = {}
-        for attribute in tree.non_delegatable().intersection(required_attrs):
+        non_delegatable = set((access_tree or {}).get("non_delegatable", []))
+        for attribute in non_delegatable.intersection(required_attrs):
             if attribute not in signature["s4_i"]:
                 return False
             s4 = self._deserialize_scalar(signature["s4_i"][attribute])
@@ -533,18 +502,42 @@ class BaseProvider:
                 "policy": signature["policy_digest"],
             }
         )
-        recomputed_c = self._hash_to_scalar(challenge_input)
+        recomputed_c_int = int(hashlib.sha256(challenge_input.encode("utf-8")).hexdigest(), 16) % policy_tree.prime_modulus
+        recomputed_c = self._scalar_from_int(recomputed_c_int)
         if self._serialize_scalar(recomputed_c) != signature["c"]:
             return False
 
-        for attribute in pseudonym["pa"]:
-            expected = (
-                self._serialize_scalar(self._hash_to_scalar(f"{signature['c']}|{attribute}|{signature['policy_digest']}"))
-                if attribute in required_attrs
-                else self._serialize_scalar(self._zero_scalar())
-            )
-            if signature["c_i"][attribute] != expected:
-                return False
+        provided_leaf_shares = {
+            attribute: self._scalar_to_int(self._deserialize_scalar(signature["c_i"][attribute]))
+            for attribute in required_attrs
+            if attribute in signature["c_i"] and signature["c_i"][attribute] != self._serialize_scalar(self._zero_scalar())
+        }
+        try:
+            reconstructed = policy_tree.reconstruct_secret(provided_leaf_shares) if access_tree else recomputed_c_int
+        except ValueError:
+            return False
+        if reconstructed != recomputed_c_int:
+            return False
+
+        original_minimal_sets = policy_tree.get_minimal_qualified_sets() if access_tree else []
+        dual_tree = policy_tree.get_dual() if access_tree else None
+        if dual_tree is not None:
+            for minimal_set in dual_tree.get_minimal_qualified_sets():
+                if not minimal_set or minimal_set in original_minimal_sets:
+                    continue
+                candidate_shares = {
+                    attribute: provided_leaf_shares[attribute]
+                    for attribute in minimal_set
+                    if attribute in provided_leaf_shares
+                }
+                if len(candidate_shares) != len(minimal_set):
+                    continue
+                try:
+                    dual_reconstructed = dual_tree.reconstruct_secret(candidate_shares)
+                except ValueError:
+                    continue
+                if dual_reconstructed == recomputed_c_int:
+                    return False
         return True
 
     def revoke(self, pseudonym: dict, credential: dict, public_params: PublicParameters) -> bool:
@@ -679,7 +672,10 @@ class CharmCryptoProvider(BaseProvider):
         return base64.b64encode(self.group.serialize(value)).decode("utf-8")
 
     def _deserialize_scalar(self, value: str) -> Any:
-        return self.group.deserialize(base64.b64decode(value.encode("utf-8")))
+        try:
+            return self.group.deserialize(base64.b64decode(value.encode("utf-8")))
+        except Exception:
+            return self.group.init(ZR, int(value))
 
     def _mul_g1(self, left: Any, right: Any) -> Any:
         return left * right
@@ -713,6 +709,15 @@ class CharmCryptoProvider(BaseProvider):
 
     def _neg_scalar(self, value: Any) -> Any:
         return -value
+
+    def _scalar_from_int(self, value: int) -> Any:
+        return self.group.init(ZR, value)
+
+    def _scalar_to_int(self, value: Any) -> int:
+        try:
+            return int(value)
+        except Exception:
+            return int(str(value))
 
 
 def get_crypto_provider(provider_name: str) -> CryptoProvider:

@@ -1,6 +1,10 @@
 import { PageHeader } from "../../components/PageHeader";
+import { useWorkers } from "hooks/useCompany";
 
 export function CompanyDashboard() {
+  const workersQuery = useWorkers();
+  const activeWorkers = (workersQuery.data ?? []).filter((worker) => worker.status === "active").length;
+
   return (
     <section className="space-y-6">
       <PageHeader eyebrow="Company Portal" title="Worker onboarding and credential operations" subtitle="Manage delivery workers, issue credentials, and monitor access history without exposing worker identity to campus gates." />
@@ -16,9 +20,11 @@ export function CompanyDashboard() {
           </ol>
         </div>
         <div className="panel">
-          <h3 className="text-lg font-semibold">Issued credential contents</h3>
-          <div className="mt-4 rounded-2xl bg-black/5 p-4 text-sm">
-            worker_id, company, role, expiry, credential proof material
+          <h3 className="text-lg font-semibold">Current company snapshot</h3>
+          <div className="mt-4 grid gap-3 text-sm">
+            <div className="rounded-2xl bg-black/5 p-4">Workers registered: {(workersQuery.data ?? []).length}</div>
+            <div className="rounded-2xl bg-black/5 p-4">Active workers: {activeWorkers}</div>
+            <div className="rounded-2xl bg-black/5 p-4">Credential issue flow runs from the worker registry page.</div>
           </div>
         </div>
       </div>
