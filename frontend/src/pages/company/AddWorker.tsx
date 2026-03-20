@@ -1,6 +1,7 @@
 import { PageHeader } from "../../components/PageHeader";
 import { FormEvent, useState } from "react";
 import { useCreateWorker } from "hooks/useCompany";
+import { toast } from "sonner";
 
 export function CompanyAddWorker() {
   const createWorker = useCreateWorker();
@@ -28,6 +29,7 @@ export function CompanyAddWorker() {
         },
         {
           onSuccess: () => {
+            toast.success("Worker created successfully");
             setWorkerId("");
             setFullName("");
             setPhone("");
@@ -37,6 +39,7 @@ export function CompanyAddWorker() {
       );
     } catch {
       setError("Attributes must be valid JSON.");
+      toast.error("Attributes must be valid JSON");
     }
   }
 

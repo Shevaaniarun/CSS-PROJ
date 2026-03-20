@@ -12,6 +12,10 @@ from app.db.session import SessionLocal, engine
 from app.utils.startup import ensure_default_admin
 
 settings = get_settings()
+DEFAULT_DEV_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 
 @asynccontextmanager
@@ -27,9 +31,10 @@ async def lifespan(_: FastAPI):
 
 def create_app(db_engine: AsyncEngine = engine) -> FastAPI:
     app = FastAPI(title=settings.app_name, debug=settings.app_debug, lifespan=lifespan)
+    cors_origins = settings.cors_origins or DEFAULT_DEV_ORIGINS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins or ["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

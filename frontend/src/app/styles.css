@@ -1,20 +1,83 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-  color: #111827;
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  color: #e5eef8;
   background:
-    radial-gradient(circle at top left, rgba(169, 214, 229, 0.65), transparent 30%),
-    linear-gradient(135deg, #f4efe6, #f9f7f2);
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.18), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.14), transparent 26%),
+    linear-gradient(135deg, #020617, #0f172a 45%, #111827);
   min-height: 100vh;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+button,
+.font-display {
+  font-family: "Space Grotesk", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 .panel {
-  @apply rounded-3xl border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur;
+  @apply rounded-3xl border p-6 shadow-sm backdrop-blur;
+  background: rgba(15, 23, 42, 0.82);
+  border-color: rgba(148, 163, 184, 0.16);
+  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.28);
 }
 
 .page-shell {
   @apply mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-6 md:px-6;
 }
 
+.skeleton {
+  @apply animate-pulse rounded-2xl;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+input,
+textarea,
+select {
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(226, 232, 240, 0.45);
+}
+
+.text-black,
+.text-black\/70,
+.text-black\/60,
+.text-black\/55,
+.text-black\/50 {
+  color: rgba(226, 232, 240, 0.78) !important;
+}
+
+.bg-white,
+.bg-white\/80,
+.bg-white\/70 {
+  background-color: rgba(15, 23, 42, 0.92) !important;
+  color: #f8fafc !important;
+}
+
+.bg-black\/5 {
+  background-color: rgba(148, 163, 184, 0.12) !important;
+}
+
+.border-black\/10 {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}

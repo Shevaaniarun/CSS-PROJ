@@ -28,6 +28,55 @@ def _normalize_crypto_attributes(attributes: list[str]) -> list[str]:
     return normalized
 
 
+def _build_effective_crypto_attributes(
+    requested_attributes: list[str],
+    worker: Worker,
+    company: Company,
+    secret_keys: dict[str, str],
+) -> list[str]:
+    supported = set(secret_keys.keys())
+    normalized = [attribute for attribute in _normalize_crypto_attributes(requested_attributes) if attribute in supported]
+
+    if "company" in supported and "company" not in normalized:
+        normalized.append("company")
+    if "role" in supported and "role" not in normalized:
+        normalized.append("role")
+    if "campus_access" in supported and "campus_access" not in normalized:
+        normalized.append("campus_access")
+
+    return normalized
+
+
+def _build_default_company_key_bundle() -> tuple[dict, dict]:
+    return generate_company_key_bundle(["company", "role", "campus_access"])
+
+
+async def _ensure_company_key_bundle(db: AsyncSession, company_id: str) -> CompanyPublicKey:
+    key_bundle = await db.scalar(select(CompanyPublicKey).where(CompanyPublicKey.company_id == company_id))
+    if not key_bundle:
+        public_params, secret_keys = _build_default_company_key_bundle()
+        key_bundle = CompanyPublicKey(
+            company_id=company_id,
+            provider=settings.crypto_provider,
+            public_parameters={**public_params, "secret_keys": secret_keys},
+            attribute_generators=public_params["attribute_generators"],
+        )
+        db.add(key_bundle)
+        await db.flush()
+        return key_bundle
+
+    secret_keys = key_bundle.public_parameters.get("secret_keys")
+    if isinstance(secret_keys, dict) and {"company", "role", "campus_access"}.issubset(secret_keys.keys()):
+        return key_bundle
+
+    public_params, regenerated_secret_keys = _build_default_company_key_bundle()
+    key_bundle.provider = settings.crypto_provider
+    key_bundle.public_parameters = {**public_params, "secret_keys": regenerated_secret_keys}
+    key_bundle.attribute_generators = public_params["attribute_generators"]
+    await db.flush()
+    return key_bundle
+
+
 @router.post("/register", response_model=MessageResponse)
 async def register_company(payload: CompanyRegisterRequest, db: AsyncSession = Depends(get_db)) -> MessageResponse:
     company = Company(
@@ -43,7 +92,7 @@ async def register_company(payload: CompanyRegisterRequest, db: AsyncSession = D
     )
     db.add(company)
     await db.flush()
-    public_params, secret_keys = generate_company_key_bundle(["company", "role", "campus_access"])
+    public_params, secret_keys = _build_default_company_key_bundle()
     db.add(
         CompanyPublicKey(
             company_id=company.id,
@@ -154,20 +203,37 @@ async def issue_worker_credential(
     worker = await db.scalar(select(Worker).where(Worker.id == payload.worker_id, Worker.company_id == company.id))
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
-    key_bundle = await db.scalar(select(CompanyPublicKey).where(CompanyPublicKey.company_id == company.id))
-    if not key_bundle:
-        raise HTTPException(status_code=400, detail="Missing company key bundle")
-    credential_blob = issue_credential(
-        worker.id,
-        _normalize_crypto_attributes(payload.attributes),
-        key_bundle.public_parameters["secret_keys"],
-        key_bundle.public_parameters,
-    )
+    key_bundle = await _ensure_company_key_bundle(db, company.id)
+    secret_keys = key_bundle.public_parameters.get("secret_keys")
+    if not isinstance(secret_keys, dict):
+        raise HTTPException(
+            status_code=500,
+            detail="Company key bundle is incomplete. Try issuing again or regenerate keys.",
+        )
+    effective_attributes = _build_effective_crypto_attributes(payload.attributes, worker, company, secret_keys)
+    if not effective_attributes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No supported cryptographic attributes found. Supported keys: {', '.join(sorted(secret_keys.keys()))}",
+        )
+    try:
+        credential_blob = issue_credential(
+            worker.id,
+            effective_attributes,
+            secret_keys,
+            key_bundle.public_parameters,
+        )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing cryptographic attribute key for {exc.args[0]}",
+        ) from exc
     credential_blob["role"] = payload.role
     credential_blob["company"] = company.name
     credential_blob["worker_id"] = worker.external_worker_id
     credential_blob["expiry"] = payload.expires_at.astimezone(UTC).isoformat()
     credential_blob["issued_attributes"] = payload.attributes
+    credential_blob["effective_crypto_attributes"] = effective_attributes
     credential = Credential(
         worker_id=worker.id,
         company_id=company.id,

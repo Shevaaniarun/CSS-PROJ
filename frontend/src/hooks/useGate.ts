@@ -6,6 +6,10 @@ function hasToken() {
 }
 
 export type GateStatus = {
+  id: string;
+  name: string;
+  identifier: string;
+  location: string;
   status: string;
   timestamp: string;
 };

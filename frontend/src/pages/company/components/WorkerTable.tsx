@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { WorkerSummary } from "hooks/useCompany";
 
 type Props = {
@@ -28,12 +29,25 @@ export function WorkerTable({ workers, onIssueCredential, onRevokeWorker, busyWo
           {workers.map((worker) => (
             <tr key={worker.id} className="border-t border-black/10 align-top">
               <td className="py-3">
-                <div className="font-medium">{worker.full_name}</div>
+                <Link className="font-medium text-moss hover:underline" to={`/company/workers/${worker.id}`}>
+                  {worker.full_name}
+                </Link>
                 <div className="text-xs text-black/50">{worker.phone}</div>
               </td>
               <td className="py-3">{worker.external_worker_id}</td>
-              <td className="py-3">{String(worker.attributes.role ?? "delivery")}</td>
-              <td className="py-3 capitalize">{worker.status}</td>
+              <td className="py-3">
+                <div>{String(worker.attributes.role ?? "delivery")}</div>
+                <div className="mt-1 text-xs text-black/50">{String(worker.attributes.company ?? "company")}</div>
+              </td>
+              <td className="py-3">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs capitalize ${
+                    worker.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {worker.status}
+                </span>
+              </td>
               <td className="py-3">
                 <div className="flex gap-2">
                   <button

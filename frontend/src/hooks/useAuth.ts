@@ -78,4 +78,5 @@ export function useWorkerLogin() {
 export function logout() {
   localStorage.removeItem("access_token");
   localStorage.removeItem("auth_role");
+  localStorage.removeItem("gate_id");
 }

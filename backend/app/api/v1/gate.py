@@ -12,8 +12,8 @@ from app.db.session import get_db
 from app.models.entities import Company, CompanyPublicKey, Gate, NonceTracking, RevocationList
 from app.repositories.gate_repo import GateRepository
 from app.schemas.auth import LoginRequest
-from app.schemas.common import MessageResponse, StatusResponse, TokenResponse
-from app.schemas.gate import GateRegisterRequest, NonceRequest, SyncRequest, VerifyRequest
+from app.schemas.common import MessageResponse, TokenResponse
+from app.schemas.gate import GateRegisterRequest, GateStatusResponse, NonceRequest, SyncRequest, VerifyRequest
 from app.services.verification_service import VerificationService
 from app.services.auth import issue_login_cookie, validate_password
 
@@ -86,7 +86,7 @@ async def verify_gate_access(
     )
 
 
-@router.post("/sync", response_model=MessageResponse)
+@router.post("/sync")
 async def sync_gate_data(
     payload: SyncRequest,
     db: AsyncSession = Depends(get_db),
@@ -111,7 +111,7 @@ async def sync_gate_data(
                     k: v for k, v in key.public_parameters.items() if k != "secret_keys"
                 },
                 "attribute_generators": key.attribute_generators,
-                "updated_at": key.updated_at,
+                "updated_at": key.updated_at.isoformat() if key.updated_at else None,
             }
         )
     revocations = await db.scalars(select(RevocationList).where(RevocationList.active.is_(True)))
@@ -128,6 +128,13 @@ async def sync_gate_data(
     return gate.offline_bundle
 
 
-@router.get("/status", response_model=StatusResponse)
-async def gate_status(gate: Gate = Depends(require_gate)) -> StatusResponse:
-    return StatusResponse(status=gate.status, timestamp=datetime.now(UTC))
+@router.get("/status", response_model=GateStatusResponse)
+async def gate_status(gate: Gate = Depends(require_gate)) -> GateStatusResponse:
+    return GateStatusResponse(
+        id=gate.id,
+        name=gate.name,
+        identifier=gate.identifier,
+        location=gate.location,
+        status=gate.status,
+        timestamp=datetime.now(UTC),
+    )

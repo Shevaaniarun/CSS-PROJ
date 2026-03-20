@@ -1,5 +1,6 @@
-import { useId, useState } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { ChangeEvent, useId, useState } from "react";
+import { Html5Qrcode, Html5QrcodeScanner } from "html5-qrcode";
+import { toast } from "sonner";
 
 type Props = {
   qrText: string;
@@ -29,6 +30,23 @@ export function CameraView({ qrText, onQrTextChange, onVerify, busy }: Props) {
     setScannerReady(true);
   }
 
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      const scanner = new Html5Qrcode(scannerId);
+      const decodedText = await scanner.scanFile(file, true);
+      onQrTextChange(decodedText);
+      toast.success("QR image decoded successfully");
+    } catch {
+      toast.error("Could not decode a QR code from the selected image");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
   return (
     <div className="panel min-h-80 bg-ink text-white">
       <h3 className="text-lg font-semibold">Scan or paste QR payload</h3>
@@ -39,6 +57,10 @@ export function CameraView({ qrText, onQrTextChange, onVerify, busy }: Props) {
         <button className="rounded-2xl bg-white/10 px-4 py-3 text-sm text-white" type="button" onClick={handleEnableScanner}>
           {scannerReady ? "Scanner ready" : "Enable camera scanner"}
         </button>
+        <label className="rounded-2xl bg-white/10 px-4 py-3 text-sm text-white">
+          Upload QR image
+          <input className="hidden" type="file" accept="image/*" onChange={handleFileChange} />
+        </label>
       </div>
       <div id={scannerId} className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2" />
       <textarea

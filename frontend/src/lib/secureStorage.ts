@@ -39,10 +39,21 @@ export type StoredCredential = {
 };
 
 export function normalizeCredentialPayload(raw: Record<string, unknown>): Record<string, unknown> {
+  if ("credential_blob" in raw && typeof raw.credential_blob === "object" && raw.credential_blob) {
+    const blob = raw.credential_blob as Record<string, unknown>;
+    return {
+      credential_id: raw.id ?? blob.credential_id ?? blob.worker_id ?? crypto.randomUUID(),
+      company: blob.company ?? raw.company_name,
+      role: blob.role,
+      expiry: blob.expiry ?? raw.expires_at,
+      ...blob,
+      source_payload: raw
+    };
+  }
   if ("credential" in raw && typeof raw.credential === "object" && raw.credential) {
     const credential = raw.credential as Record<string, unknown>;
     return {
-      credential_id: raw.credential_id ?? raw.pseudonym_id ?? credential.worker_id ?? crypto.randomUUID(),
+      credential_id: raw.credential_id ?? raw.id ?? raw.pseudonym_id ?? credential.worker_id ?? crypto.randomUUID(),
       company: credential.company ?? raw.company,
       role: credential.role ?? raw.role,
       expiry: credential.expiry ?? raw.expiry,
@@ -81,6 +92,26 @@ export function validateImportedCredential(payload: Record<string, unknown>): { 
   };
 }
 
+function repairStoredCredential(candidate: StoredCredential): StoredCredential {
+  const sourcePayload =
+    candidate.blob && typeof candidate.blob.source_payload === "object" && candidate.blob.source_payload
+      ? (candidate.blob.source_payload as Record<string, unknown>)
+      : null;
+
+  const repairedCredentialId =
+    (typeof sourcePayload?.id === "string" && sourcePayload.id) ||
+    (typeof sourcePayload?.credential_id === "string" && sourcePayload.credential_id) ||
+    (typeof candidate.blob.credential_id === "string" && candidate.blob.credential_id) ||
+    candidate.credentialId ||
+    candidate.id;
+
+  return {
+    ...candidate,
+    id: repairedCredentialId,
+    credentialId: repairedCredentialId
+  };
+}
+
 export function loadStoredCredentials(): StoredCredential[] {
   const encrypted = localStorage.getItem(STORAGE_KEY);
   if (!encrypted) {
@@ -91,7 +122,12 @@ export function loadStoredCredentials(): StoredCredential[] {
     const key = ensureKey();
     const json = xorWithKey(decode(encrypted), key);
     const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? (parsed as StoredCredential[]) : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    const repaired = (parsed as StoredCredential[]).map(repairStoredCredential);
+    saveStoredCredentials(repaired);
+    return repaired;
   } catch {
     return [];
   }
@@ -106,7 +142,8 @@ export function saveStoredCredentials(credentials: StoredCredential[]): void {
 
 export function upsertStoredCredential(credential: StoredCredential): StoredCredential[] {
   const existing = loadStoredCredentials();
-  const next = [...existing.filter((item) => item.id !== credential.id), credential];
+  const repaired = repairStoredCredential(credential);
+  const next = [...existing.filter((item) => item.id !== repaired.id), repaired];
   saveStoredCredentials(next);
   return next;
 }

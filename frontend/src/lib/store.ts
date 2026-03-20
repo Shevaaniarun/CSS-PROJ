@@ -32,7 +32,7 @@ export const useAppStore = create<AppState>((set) => ({
       localStorage.getItem("auth_role") === "worker")
       ? (localStorage.getItem("auth_role") as AppState["role"])
       : "admin",
-  gateId: "",
+  gateId: typeof window !== "undefined" ? localStorage.getItem("gate_id") ?? "" : "",
   latestQr: null,
   latestGateResult: null,
   setRole: (role) => {
@@ -41,7 +41,16 @@ export const useAppStore = create<AppState>((set) => ({
     }
     set({ role });
   },
-  setGateId: (gateId) => set({ gateId }),
+  setGateId: (gateId) => {
+    if (typeof window !== "undefined") {
+      if (gateId) {
+        localStorage.setItem("gate_id", gateId);
+      } else {
+        localStorage.removeItem("gate_id");
+      }
+    }
+    set({ gateId });
+  },
   setLatestQr: (latestQr) => set({ latestQr }),
   setLatestGateResult: (latestGateResult) => set({ latestGateResult })
 }));

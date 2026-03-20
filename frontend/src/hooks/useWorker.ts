@@ -14,6 +14,15 @@ export type WorkerHistoryEntry = {
   created_at: string;
 };
 
+export type WorkerCredentialRecord = {
+  id: string;
+  expires_at: string;
+  status: string;
+  created_at: string;
+  company_name: string | null;
+  credential_blob: Record<string, unknown>;
+};
+
 export type GeneratedQrPayload = Record<string, unknown> & {
   pseudonym_id?: string;
   credential_id?: string;
@@ -62,6 +71,15 @@ export function useGeneratePseudonym() {
       access_tree: Record<string, unknown>;
       message: Record<string, unknown>;
     }) => apiClient.post<GeneratedQrPayload>("/worker/pseudonym/generate", payload)
+  });
+}
+
+export function useWorkerCredentials() {
+  return useQuery({
+    queryKey: ["worker", "credentials"],
+    queryFn: () => apiClient.get<WorkerCredentialRecord[]>("/worker/credentials"),
+    refetchInterval: 10000,
+    enabled: hasToken()
   });
 }
 

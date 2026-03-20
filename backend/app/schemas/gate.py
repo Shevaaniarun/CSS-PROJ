@@ -26,3 +26,12 @@ class VerifyRequest(BaseModel):
 
 class SyncRequest(BaseModel):
     gate_id: str
+
+
+class GateStatusResponse(BaseModel):
+    id: str
+    name: str
+    identifier: str
+    location: str
+    status: str
+    timestamp: datetime

@@ -9,7 +9,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
-from app.models.entities import Admin, Company, Credential, Gate, Worker
+from app.models.entities import Admin, Company, CompanyPublicKey, Credential, Gate, Worker
 from app.api.v1 import admin as admin_api
 from app.api.v1 import company as company_api
 from app.api.v1 import gate as gate_api
@@ -296,12 +296,173 @@ async def _run_worker_gate_verification_flow():
         await _close_client(engine, client)
 
 
+async def _run_company_issue_regenerates_missing_key_bundle():
+    app, engine, session_maker, client = await _create_client()
+    try:
+        await _seed_admin(session_maker)
+
+        await client.post(
+            "/api/v1/company/register",
+            json={
+                "name": "Fresh Keys Campus",
+                "email": "ops@fresh-keys.test",
+                "password": "company-pass",
+                "license_id": "LIC-404",
+                "contact_name": "Ops Lead",
+                "contact_phone": "5550000000",
+                "metadata": {"region": "south-campus"},
+            },
+        )
+        await _login_admin(client)
+        company_id = (await client.get("/api/v1/admin/pending-companies")).json()[0]["id"]
+        await client.post(f"/api/v1/admin/approve-company/{company_id}", json={"approve": True, "notes": "ok"})
+
+        await client.post(
+            "/api/v1/company/auth",
+            json={"email": "ops@fresh-keys.test", "password": "company-pass"},
+        )
+        worker_response = await client.post(
+            "/api/v1/company/workers",
+            json={
+                "worker_id": "worker-4040",
+                "full_name": "Key Recovery Worker",
+                "phone": "5557778888",
+                "password": "worker-pass",
+                "role": "delivery",
+                "attributes": {"route": "admin-block"},
+            },
+        )
+        worker_id = worker_response.json()["id"]
+
+        async with session_maker() as session:
+            key_bundle = await session.scalar(select(CompanyPublicKey).where(CompanyPublicKey.company_id == company_id))
+            assert key_bundle is not None
+            key_bundle.public_parameters = {
+                key: value for key, value in key_bundle.public_parameters.items() if key != "secret_keys"
+            }
+            await session.commit()
+
+        issue_response = await client.post(
+            "/api/v1/company/credentials/issue",
+            json={
+                "worker_id": worker_id,
+                "expires_at": (datetime.now(UTC) + timedelta(days=30)).isoformat(),
+                "role": "delivery",
+                "attributes": ["company:Fresh Keys Campus", "role:delivery"],
+            },
+        )
+        assert issue_response.status_code == 200
+
+        async with session_maker() as session:
+            key_bundle = await session.scalar(select(CompanyPublicKey).where(CompanyPublicKey.company_id == company_id))
+            assert key_bundle is not None
+            secret_keys = key_bundle.public_parameters.get("secret_keys")
+            assert isinstance(secret_keys, dict)
+            assert {"company", "role", "campus_access"}.issubset(secret_keys.keys())
+    finally:
+        app.dependency_overrides.clear()
+        await _close_client(engine, client)
+
+
+async def _run_worker_credentials_scoped_to_authenticated_worker():
+    app, engine, session_maker, client = await _create_client()
+    try:
+        await _seed_admin(session_maker)
+
+        await client.post(
+            "/api/v1/company/register",
+            json={
+                "name": "Scoped Campus",
+                "email": "ops@scoped.test",
+                "password": "company-pass",
+                "license_id": "LIC-505",
+                "contact_name": "Ops Lead",
+                "contact_phone": "5551111111",
+                "metadata": {"region": "central-campus"},
+            },
+        )
+        await _login_admin(client)
+        company_id = (await client.get("/api/v1/admin/pending-companies")).json()[0]["id"]
+        await client.post(f"/api/v1/admin/approve-company/{company_id}", json={"approve": True, "notes": "ok"})
+
+        await client.post("/api/v1/company/auth", json={"email": "ops@scoped.test", "password": "company-pass"})
+        first_worker = await client.post(
+            "/api/v1/company/workers",
+            json={
+                "worker_id": "worker-5001",
+                "full_name": "Scoped Worker One",
+                "phone": "5551110001",
+                "password": "worker-pass",
+                "role": "delivery",
+                "attributes": {"route": "block-a"},
+            },
+        )
+        second_worker = await client.post(
+            "/api/v1/company/workers",
+            json={
+                "worker_id": "worker-5002",
+                "full_name": "Scoped Worker Two",
+                "phone": "5551110002",
+                "password": "worker-pass",
+                "role": "delivery",
+                "attributes": {"route": "block-b"},
+            },
+        )
+        first_worker_id = first_worker.json()["id"]
+        second_worker_id = second_worker.json()["id"]
+
+        await client.post(
+            "/api/v1/company/credentials/issue",
+            json={
+                "worker_id": first_worker_id,
+                "expires_at": (datetime.now(UTC) + timedelta(days=30)).isoformat(),
+                "role": "delivery",
+                "attributes": ["company:Scoped Campus", "role:delivery"],
+            },
+        )
+        await client.post(
+            "/api/v1/company/credentials/issue",
+            json={
+                "worker_id": second_worker_id,
+                "expires_at": (datetime.now(UTC) + timedelta(days=30)).isoformat(),
+                "role": "delivery",
+                "attributes": ["company:Scoped Campus", "role:delivery"],
+            },
+        )
+
+        worker_client = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+        try:
+            login = await worker_client.post(
+                "/api/v1/worker/auth",
+                json={"external_worker_id": "worker-5001", "password": "worker-pass"},
+            )
+            assert login.status_code == 200
+            credentials_response = await worker_client.get("/api/v1/worker/credentials")
+            assert credentials_response.status_code == 200
+            credentials = credentials_response.json()
+            assert len(credentials) == 1
+            assert credentials[0]["credential_blob"]["worker_id"] == "worker-5001"
+        finally:
+            await worker_client.aclose()
+    finally:
+        app.dependency_overrides.clear()
+        await _close_client(engine, client)
+
+
 def test_admin_company_gate_api_flow() -> None:
     asyncio.run(_run_admin_company_gate_flow())
 
 
 def test_worker_gate_verification_api_flow() -> None:
     asyncio.run(_run_worker_gate_verification_flow())
+
+
+def test_company_issue_regenerates_missing_key_bundle() -> None:
+    asyncio.run(_run_company_issue_regenerates_missing_key_bundle())
+
+
+def test_worker_credentials_scoped_to_authenticated_worker() -> None:
+    asyncio.run(_run_worker_credentials_scoped_to_authenticated_worker())
 
 
 async def _prepare_verification_fixture(

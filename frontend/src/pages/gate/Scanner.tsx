@@ -1,6 +1,9 @@
 import { PageHeader } from "../../components/PageHeader";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { EmptyState } from "../../components/EmptyState";
+import { LoadingSpinner } from "../../components/LoadingSpinner";
 import { CameraView } from "./components/CameraView";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 import { useGateNonce, useGateStatus, useGateSync, useGateVerify } from "hooks/useGate";
@@ -18,10 +21,10 @@ export function GateScanner() {
   const [cachedNonce, setCachedNonce] = useState<string | null>(localStorage.getItem("gate:last-nonce"));
 
   useEffect(() => {
-    if (!gateId) {
-      setGateId("demo-gate-id");
+    if (gateStatus.data?.id && gateStatus.data.id !== gateId) {
+      setGateId(gateStatus.data.id);
     }
-  }, [gateId, setGateId]);
+  }, [gateId, gateStatus.data?.id, setGateId]);
 
   async function handleIssueNonce() {
     if (!gateId) {
@@ -61,31 +64,45 @@ export function GateScanner() {
         }
       });
       setVerificationSummary(response.granted ? "Access granted" : `Access denied: ${response.failure_reason ?? "unknown reason"}`);
+      if (response.granted) {
+        toast.success("Access granted");
+      } else {
+        toast.error(response.failure_reason ?? "Access denied");
+      }
       navigate("/gate/result");
     } catch {
       setVerificationSummary("QR payload must be valid JSON.");
+      toast.error("QR payload must be valid JSON");
     }
   }
 
   return (
     <section className="space-y-6">
       <PageHeader eyebrow="Gate Kiosk" title="Scan one-time worker pseudonyms" subtitle="The kiosk performs signature, expiry, nonce, trust, revocation, and replay checks in sequence." />
+      {gateStatus.isLoading ? <LoadingSpinner label="Loading gate session..." /> : null}
+      {gateStatus.isError ? (
+        <EmptyState
+          title="Gate session unavailable"
+          description="Sign in as an approved gate to fetch its kiosk identity and begin issuing nonces."
+        />
+      ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <OfflineIndicator online={navigator.onLine} hasCachedNonce={Boolean(cachedNonce)} />
         <input
-          className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm"
+          className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white"
           placeholder="Gate ID"
-          value={gateId}
-          onChange={(event) => setGateId(event.target.value)}
+          value={gateStatus.data?.id ?? gateId}
+          disabled
+          readOnly
         />
-        <button className="rounded-full bg-moss px-4 py-2 text-sm text-white" onClick={() => void handleIssueNonce()}>
+        <button className="rounded-full bg-moss px-4 py-2 text-sm text-white" disabled={!gateId} onClick={() => void handleIssueNonce()}>
           Get nonce
         </button>
-        <button className="rounded-full bg-white px-4 py-2 text-sm" onClick={() => gateSync.mutate(gateId)}>
+        <button className="rounded-full bg-white/10 px-4 py-2 text-sm text-white" disabled={!gateId} onClick={() => gateSync.mutate(gateId)}>
           Sync trust cache
         </button>
-        <div className="text-sm text-black/60">
-          Status: {gateStatus.data?.status ?? "unknown"} | Nonce: {cachedNonce ?? "not issued"}
+        <div className="text-sm text-white/70">
+          {gateStatus.data ? `${gateStatus.data.name} (${gateStatus.data.location})` : "No gate profile loaded"} | Status: {gateStatus.data?.status ?? "unknown"} | Nonce: {cachedNonce ?? "not issued"}
         </div>
       </div>
       <CameraView qrText={qrText} onQrTextChange={setQrText} onVerify={() => void handleVerify()} busy={gateVerify.isPending} />

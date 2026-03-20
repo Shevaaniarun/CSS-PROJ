@@ -1,8 +1,9 @@
+import { LoadingSpinner } from "../../components/LoadingSpinner";
 import { PageHeader } from "../../components/PageHeader";
+import { useAccessLogs, useAdminStats, useApproveCompany, usePendingCompanies, usePendingGates } from "hooks/useCompany";
 import { ActivityTable } from "./components/ActivityTable";
 import { ApprovalModal } from "./components/ApprovalModal";
 import { StatsCards } from "./components/StatsCards";
-import { useAccessLogs, useAdminStats, useApproveCompany, usePendingCompanies, usePendingGates } from "hooks/useCompany";
 
 export function AdminDashboard() {
   const statsQuery = useAdminStats();
@@ -20,7 +21,12 @@ export function AdminDashboard() {
 
   return (
     <section className="space-y-6">
-      <PageHeader eyebrow="Admin Console" title="System oversight and trust decisions" subtitle="Review enrollment, monitor gates, revoke compromised entities, and keep an auditable trail without building a central delivery-worker identity database." />
+      <PageHeader
+        eyebrow="Admin Console"
+        title="System oversight and trust decisions"
+        subtitle="Review enrollment, monitor gates, revoke compromised entities, and keep an auditable trail without building a central delivery-worker identity database."
+      />
+      {statsQuery.isLoading || accessLogsQuery.isLoading ? <LoadingSpinner label="Refreshing admin oversight data..." /> : null}
       <StatsCards stats={stats} />
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <ActivityTable rows={accessLogsQuery.data ?? []} />
@@ -33,7 +39,7 @@ export function AdminDashboard() {
           }))}
           gates={(gatesQuery.data ?? []).map((gate) => ({
             id: gate.id,
-            label: `${gate.name} · ${gate.location}`,
+            label: `${gate.name} - ${gate.location}`,
             status: gate.status,
             created_at: gate.created_at
           }))}

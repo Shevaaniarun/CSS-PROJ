@@ -71,6 +71,29 @@ async def get_credential(
     return credential.credential_blob
 
 
+@router.get("/credentials")
+async def list_worker_credentials(
+    db: AsyncSession = Depends(get_db),
+    worker: Worker = Depends(require_worker),
+) -> list[dict]:
+    credentials = await db.scalars(
+        select(Credential).where(Credential.worker_id == worker.id).order_by(Credential.created_at.desc())
+    )
+    company = await db.scalar(select(Company).where(Company.id == worker.company_id))
+    company_name = company.name if company else worker.attributes.get("company")
+    return [
+        {
+            "id": credential.id,
+            "expires_at": credential.expires_at,
+            "status": credential.status,
+            "created_at": credential.created_at,
+            "company_name": company_name,
+            "credential_blob": credential.credential_blob,
+        }
+        for credential in credentials
+    ]
+
+
 @router.post("/pseudonym/generate")
 async def create_pseudonym(
     payload: PseudonymGenerateRequest,

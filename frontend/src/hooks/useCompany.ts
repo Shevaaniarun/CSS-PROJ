@@ -120,10 +120,28 @@ export function usePendingCompanies() {
   });
 }
 
+export function useCompanies() {
+  return useQuery({
+    queryKey: ["admin", "companies"],
+    queryFn: () => apiClient.get<CompanySummary[]>("/admin/companies"),
+    refetchInterval: 5000,
+    enabled: hasToken()
+  });
+}
+
 export function usePendingGates() {
   return useQuery({
     queryKey: ["admin", "pending-gates"],
     queryFn: () => apiClient.get<GateSummary[]>("/admin/pending-gates"),
+    refetchInterval: 5000,
+    enabled: hasToken()
+  });
+}
+
+export function useGates() {
+  return useQuery({
+    queryKey: ["admin", "gates"],
+    queryFn: () => apiClient.get<GateSummary[]>("/admin/gates"),
     refetchInterval: 5000,
     enabled: hasToken()
   });
@@ -176,9 +194,16 @@ export function useCreateWorker() {
 }
 
 export function useIssueCredential() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: IssueCredentialPayload) =>
-      apiClient.post<{ message: string }>("/company/credentials/issue", payload)
+      apiClient.post<{ message: string }>("/company/credentials/issue", payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["company", "credentials"] }),
+        queryClient.invalidateQueries({ queryKey: ["company", "workers"] })
+      ]);
+    }
   });
 }
 

@@ -2,7 +2,16 @@ import { PageHeader } from "../../components/PageHeader";
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useIssueCredential, useRevokeWorker, useWorkers } from "hooks/useCompany";
+import { toast } from "sonner";
 import { IssueCredential } from "./components/IssueCredential";
+
+function deriveCredentialAttributes(attributes: Record<string, unknown>) {
+  return [
+    `company:${String(attributes.company ?? "approved")}`,
+    `role:${String(attributes.role ?? "delivery")}`,
+    `campus_access:${String(attributes.campus_access ?? "active")}`
+  ];
+}
 
 export function CompanyWorkerDetail() {
   const { id } = useParams();
@@ -23,7 +32,7 @@ export function CompanyWorkerDetail() {
     );
   }
 
-  const defaultAttributes = Object.entries(worker.attributes).map(([key, value]) => `${key}:${String(value)}`);
+  const defaultAttributes = deriveCredentialAttributes(worker.attributes);
 
   return (
     <section className="space-y-6">
@@ -39,7 +48,12 @@ export function CompanyWorkerDetail() {
         defaultRole={String(worker.attributes.role ?? "delivery")}
         defaultAttributes={defaultAttributes}
         busy={issueCredential.isPending}
-        onIssue={(payload) => issueCredential.mutate(payload)}
+        onIssue={(payload) =>
+          issueCredential.mutate(payload, {
+            onSuccess: () => toast.success(`Credential issued for ${worker.full_name}`),
+            onError: (error) => toast.error(error instanceof Error ? error.message : "Credential issuance failed")
+          })
+        }
       />
       {issueCredential.isSuccess ? <div className="panel text-sm text-moss">Credential issued successfully for {worker.full_name}.</div> : null}
       <div className="panel">
@@ -50,7 +64,12 @@ export function CompanyWorkerDetail() {
         <button
           className="mt-4 rounded-2xl bg-ember px-4 py-3 text-sm text-white"
           disabled={revokeWorker.isPending}
-          onClick={() => revokeWorker.mutate(worker.id)}
+          onClick={() =>
+            revokeWorker.mutate(worker.id, {
+              onSuccess: () => toast.success(`${worker.full_name} revoked`),
+              onError: (error) => toast.error(error instanceof Error ? error.message : "Worker revoke failed")
+            })
+          }
         >
           {revokeWorker.isPending ? "Revoking..." : "Revoke worker"}
         </button>

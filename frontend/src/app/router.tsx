@@ -4,10 +4,8 @@ import { AppLayout } from "../components/AppLayout";
 import { LoginPage } from "../pages/Login";
 import { AdminDashboard } from "../pages/admin/Dashboard";
 import { AdminCompanies } from "../pages/admin/Companies";
-import { AdminCompanyDetail } from "../pages/admin/CompanyDetail";
 import { AdminGates } from "../pages/admin/Gates";
 import { AdminAuditLogs } from "../pages/admin/AuditLogs";
-import { AdminSettings } from "../pages/admin/Settings";
 import { CompanyDashboard } from "../pages/company/Dashboard";
 import { CompanyWorkers } from "../pages/company/Workers";
 import { CompanyAddWorker } from "../pages/company/AddWorker";
@@ -61,10 +59,8 @@ export const router = createBrowserRouter([
       { path: "admin", element: <Navigate to="/admin/dashboard" replace /> },
       { path: "admin/dashboard", element: <RequireRole role="admin"><AdminDashboard /></RequireRole> },
       { path: "admin/companies", element: <RequireRole role="admin"><AdminCompanies /></RequireRole> },
-      { path: "admin/companies/:id", element: <RequireRole role="admin"><AdminCompanyDetail /></RequireRole> },
       { path: "admin/gates", element: <RequireRole role="admin"><AdminGates /></RequireRole> },
       { path: "admin/audit-logs", element: <RequireRole role="admin"><AdminAuditLogs /></RequireRole> },
-      { path: "admin/settings", element: <RequireRole role="admin"><AdminSettings /></RequireRole> },
       { path: "company", element: <RequireRole role="company"><CompanyDashboard /></RequireRole> },
       { path: "company/register", element: <Navigate to="/register/company" replace /> },
       { path: "company/workers", element: <RequireRole role="company"><CompanyWorkers /></RequireRole> },

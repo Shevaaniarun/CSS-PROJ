@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useId, useState } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeScanner } from "html5-qrcode";
 import { StoredCredential, validateImportedCredential } from "lib/secureStorage";
 
 type Props = {
@@ -54,6 +54,23 @@ export function CredentialImportPanel({ onImport, busy }: Props) {
       }
     };
     reader.readAsText(file);
+  }
+
+  async function handleQrImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      const scanner = new Html5Qrcode(scannerId);
+      const decodedText = await scanner.scanFile(file, true);
+      importPayload(JSON.parse(decodedText) as Record<string, unknown>);
+    } catch {
+      setError("Selected image did not contain a valid credential QR.");
+      setSuccess(null);
+    } finally {
+      event.target.value = "";
+    }
   }
 
   function handleEnableScanner() {
@@ -119,7 +136,11 @@ export function CredentialImportPanel({ onImport, busy }: Props) {
 
       {mode === "scan" ? (
         <div className="space-y-3">
-          <div className="text-sm text-black/60">Grant camera access and scan the credential QR from the onboarding device.</div>
+          <div className="text-sm text-black/60">Grant camera access and scan the credential QR from the onboarding device, or upload a screenshot/image of the QR.</div>
+          <label className="flex min-h-20 cursor-pointer items-center justify-center rounded-3xl border border-dashed border-black/15 bg-black/5 px-4 py-6 text-sm text-black/70">
+            Upload QR screenshot
+            <input className="hidden" type="file" accept="image/*" onChange={handleQrImageChange} />
+          </label>
           <div id={scannerId} className="overflow-hidden rounded-3xl border border-black/10 bg-black/5 p-2" />
         </div>
       ) : null}

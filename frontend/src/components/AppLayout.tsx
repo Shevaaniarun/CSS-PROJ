@@ -7,8 +7,7 @@ const linksByRole = {
     { to: "/admin/dashboard", label: "Dashboard" },
     { to: "/admin/companies", label: "Companies" },
     { to: "/admin/gates", label: "Gates" },
-    { to: "/admin/audit-logs", label: "Audit Logs" },
-    { to: "/admin/settings", label: "Settings" }
+    { to: "/admin/audit-logs", label: "Audit Logs" }
   ],
   company: [
     { to: "/company", label: "Dashboard" },
@@ -30,10 +29,11 @@ const linksByRole = {
 } as const;
 
 export function AppLayout() {
-  const { role, setRole } = useAppStore();
+  const { role } = useAppStore();
   const navigate = useNavigate();
   const storedRole = getStoredRole() ?? role;
   const navLinks = linksByRole[storedRole];
+  const roleLabel = storedRole.charAt(0).toUpperCase() + storedRole.slice(1);
 
   return (
     <div className="page-shell">
@@ -41,7 +41,12 @@ export function AppLayout() {
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-moss">Campus Privacy Auth</p>
           <h1 className="text-3xl font-semibold text-ink">Privacy-preserving delivery access</h1>
-          <p className="mt-2 text-sm text-black/60">Signed in as {storedRole}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-black/60">
+            <span className="rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700">
+              {roleLabel} session
+            </span>
+            <span>Role-specific routes and actions are active.</span>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <button

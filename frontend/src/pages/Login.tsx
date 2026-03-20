@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   getDefaultRouteForRole,
   getStoredRole,
@@ -61,9 +62,12 @@ export function LoginPage() {
       } else {
         await workerLogin.mutateAsync({ external_worker_id: identifier, password });
       }
+      toast.success("Signed in successfully");
       navigate(getDefaultRouteForRole(mode));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Login failed");
+      const message = caught instanceof Error ? caught.message : "Login failed";
+      setError(message);
+      toast.error(message);
     }
   }
 

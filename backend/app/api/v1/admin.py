@@ -63,11 +63,27 @@ async def pending_companies(
     return [CompanySummary.model_validate(company) for company in companies]
 
 
+@router.get("/companies", response_model=list[CompanySummary])
+async def list_companies(
+    db: AsyncSession = Depends(get_db), _: Admin = Depends(require_admin)
+) -> list[CompanySummary]:
+    companies = await db.scalars(select(Company).order_by(Company.created_at.desc()))
+    return [CompanySummary.model_validate(company) for company in companies]
+
+
 @router.get("/pending-gates", response_model=list[GateSummary])
 async def pending_gates(
     db: AsyncSession = Depends(get_db), _: Admin = Depends(require_admin)
 ) -> list[GateSummary]:
     gates = await db.scalars(select(Gate).where(Gate.status == "pending"))
+    return [GateSummary.model_validate(gate) for gate in gates]
+
+
+@router.get("/gates", response_model=list[GateSummary])
+async def list_gates(
+    db: AsyncSession = Depends(get_db), _: Admin = Depends(require_admin)
+) -> list[GateSummary]:
+    gates = await db.scalars(select(Gate).order_by(Gate.created_at.desc()))
     return [GateSummary.model_validate(gate) for gate in gates]
 
 
