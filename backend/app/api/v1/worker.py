@@ -118,22 +118,25 @@ async def create_pseudonym(
         raise HTTPException(status_code=400, detail="Missing company public parameters")
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    qr_data = generate_pseudonym(
-        credential.credential_blob,
-        key_bundle.public_parameters,
-        _normalize_attribute_list(payload.own_attributes),
-        _normalize_attribute_map(payload.delegated_attributes),
-        _normalize_attribute_map(payload.simulated_attributes),
-        _normalize_access_tree(payload.access_tree),
-        {
-            **payload.message,
-            "nonce": payload.gate_nonce,
-            "worker_id": worker.external_worker_id,
-            "company": company.name,
-            "role": credential.credential_blob.get("role", worker.attributes.get("role")),
-            "credential_expiry": credential.expires_at.isoformat(),
-        },
-    )
+    try:
+        qr_data = generate_pseudonym(
+            credential.credential_blob,
+            key_bundle.public_parameters,
+            _normalize_attribute_list(payload.own_attributes),
+            _normalize_attribute_map(payload.delegated_attributes),
+            _normalize_attribute_map(payload.simulated_attributes),
+            _normalize_access_tree(payload.access_tree),
+            {
+                **payload.message,
+                "nonce": payload.gate_nonce,
+                "worker_id": worker.external_worker_id,
+                "company": company.name,
+                "role": credential.credential_blob.get("role", worker.attributes.get("role")),
+                "credential_expiry": credential.expires_at.isoformat(),
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     pseudonym = Pseudonym(
         worker_id=worker.id,
         credential_id=credential.id,

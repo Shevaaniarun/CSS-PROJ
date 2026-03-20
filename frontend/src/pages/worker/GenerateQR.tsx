@@ -10,7 +10,12 @@ import { useAppStore } from "lib/store";
 function getCredentialKeys(credential: WorkerCredentialRecord): string[] {
   const effective = credential.credential_blob.effective_crypto_attributes;
   if (Array.isArray(effective)) {
-    return effective.filter((item): item is string => typeof item === "string");
+    const present = effective.filter(
+      (item): item is string => typeof item === "string" && typeof credential.credential_blob[item] === "string"
+    );
+    if (present.length > 0) {
+      return present;
+    }
   }
   const fallback = ["company", "role", "campus_access"].filter(
     (key) => typeof credential.credential_blob[key] === "string"
