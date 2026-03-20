@@ -1,11 +1,13 @@
 import { PageHeader } from "../../components/PageHeader";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CameraView } from "./components/CameraView";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 import { useGateNonce, useGateStatus, useGateSync, useGateVerify } from "hooks/useGate";
 import { useAppStore } from "lib/store";
 
 export function GateScanner() {
+  const navigate = useNavigate();
   const { gateId, setGateId, setLatestGateResult } = useAppStore();
   const gateStatus = useGateStatus();
   const gateNonce = useGateNonce();
@@ -59,6 +61,7 @@ export function GateScanner() {
         }
       });
       setVerificationSummary(response.granted ? "Access granted" : `Access denied: ${response.failure_reason ?? "unknown reason"}`);
+      navigate("/gate/result");
     } catch {
       setVerificationSummary("QR payload must be valid JSON.");
     }

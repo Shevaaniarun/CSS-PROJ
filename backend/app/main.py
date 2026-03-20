@@ -8,7 +8,8 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.base import Base
-from app.db.session import engine
+from app.db.session import SessionLocal, engine
+from app.utils.startup import ensure_default_admin
 
 settings = get_settings()
 
@@ -18,6 +19,9 @@ async def lifespan(_: FastAPI):
     configure_logging()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    if settings.app_env == "development":
+        async with SessionLocal() as session:
+            await ensure_default_admin(session)
     yield
 
 
@@ -40,4 +44,3 @@ def create_app(db_engine: AsyncEngine = engine) -> FastAPI:
 
 
 app = create_app()
-

@@ -1,5 +1,5 @@
-import { PageHeader } from "../../components/PageHeader";
 import { FormEvent, useMemo, useState } from "react";
+import { PageHeader } from "../../components/PageHeader";
 import { useGeneratePseudonym, useStoredCredentials } from "hooks/useWorker";
 import { useAppStore } from "lib/store";
 
@@ -9,9 +9,14 @@ export function WorkerGenerateQR() {
   const { setLatestQr } = useAppStore();
   const [gateNonce, setGateNonce] = useState("");
   const [credentialId, setCredentialId] = useState("");
-  const [policyText, setPolicyText] = useState("{\"type\":\"AND\",\"children\":[{\"type\":\"leaf\",\"attribute\":\"company:Amazon\"},{\"type\":\"leaf\",\"attribute\":\"role:delivery\"}]}");
+  const [policyText, setPolicyText] = useState(
+    "{\"type\":\"AND\",\"children\":[{\"type\":\"leaf\",\"attribute\":\"company:Amazon\"},{\"type\":\"leaf\",\"attribute\":\"role:delivery\"}]}"
+  );
   const selectedCredential = useMemo(
-    () => (credentialsQuery.data ?? []).find((credential) => credential.credentialId === credentialId || credential.id === credentialId),
+    () =>
+      (credentialsQuery.data ?? []).find(
+        (credential) => credential.credentialId === credentialId || credential.id === credentialId
+      ),
     [credentialId, credentialsQuery.data]
   );
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +24,7 @@ export function WorkerGenerateQR() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCredential) {
-      setError("Select or paste an imported credential first.");
+      setError("Select or import a credential first.");
       return;
     }
     try {
@@ -51,20 +56,41 @@ export function WorkerGenerateQR() {
 
   return (
     <section className="space-y-6">
-      <PageHeader eyebrow="Worker Wallet" title="Generate gate QR" subtitle="Generate a one-time pseudonym with a five-minute lifetime for the current campus entry attempt." />
+      <PageHeader
+        eyebrow="Worker Wallet"
+        title="Generate gate QR"
+        subtitle="Generate a one-time pseudonym with a five-minute lifetime for the current campus entry attempt."
+      />
       <form className="panel grid gap-4" onSubmit={handleSubmit}>
-        <input className="rounded-2xl border border-black/10 px-4 py-3" placeholder="Paste gate nonce" value={gateNonce} onChange={(event) => setGateNonce(event.target.value)} />
-        <select className="rounded-2xl border border-black/10 px-4 py-3" value={credentialId} onChange={(event) => setCredentialId(event.target.value)}>
+        <input
+          className="rounded-2xl border border-black/10 px-4 py-3"
+          placeholder="Paste gate nonce"
+          value={gateNonce}
+          onChange={(event) => setGateNonce(event.target.value)}
+        />
+        <select
+          className="rounded-2xl border border-black/10 px-4 py-3"
+          value={credentialId}
+          onChange={(event) => setCredentialId(event.target.value)}
+        >
           <option value="">Select imported credential</option>
           {(credentialsQuery.data ?? []).map((credential) => (
             <option key={credential.id} value={credential.credentialId}>
-              {credential.company} · {credential.credentialId}
+              {credential.company} | {credential.credentialId}
             </option>
           ))}
         </select>
-        <textarea className="rounded-2xl border border-black/10 px-4 py-3" placeholder="Access tree / attribute disclosure policy" rows={5} value={policyText} onChange={(event) => setPolicyText(event.target.value)} />
+        <textarea
+          className="rounded-2xl border border-black/10 px-4 py-3"
+          placeholder="Access tree / attribute disclosure policy"
+          rows={5}
+          value={policyText}
+          onChange={(event) => setPolicyText(event.target.value)}
+        />
         {error ? <div className="text-sm text-ember">{error}</div> : null}
-        {generatePseudonym.isSuccess ? <div className="text-sm text-moss">Pseudonym generated. Open the QR display page to present it to the gate.</div> : null}
+        {generatePseudonym.isSuccess ? (
+          <div className="text-sm text-moss">Pseudonym generated. Open the QR display page to present it to the gate.</div>
+        ) : null}
         <button className="rounded-2xl bg-moss px-4 py-3 text-sm text-white" disabled={generatePseudonym.isPending}>
           {generatePseudonym.isPending ? "Generating..." : "Generate live QR"}
         </button>

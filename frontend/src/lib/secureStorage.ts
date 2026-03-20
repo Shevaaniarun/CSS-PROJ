@@ -38,6 +38,49 @@ export type StoredCredential = {
   blob: Record<string, unknown>;
 };
 
+export function normalizeCredentialPayload(raw: Record<string, unknown>): Record<string, unknown> {
+  if ("credential" in raw && typeof raw.credential === "object" && raw.credential) {
+    const credential = raw.credential as Record<string, unknown>;
+    return {
+      credential_id: raw.credential_id ?? raw.pseudonym_id ?? credential.worker_id ?? crypto.randomUUID(),
+      company: credential.company ?? raw.company,
+      role: credential.role ?? raw.role,
+      expiry: credential.expiry ?? raw.expiry,
+      ...credential,
+      source_payload: raw
+    };
+  }
+  return raw;
+}
+
+export function validateImportedCredential(payload: Record<string, unknown>): { ok: true; credential: StoredCredential } | { ok: false; error: string } {
+  const normalized = normalizeCredentialPayload(payload);
+  const company = normalized.company;
+  const role = normalized.role;
+  const expiry = normalized.expiry;
+  const credentialId = normalized.credential_id ?? normalized.worker_id;
+
+  if (typeof company !== "string" || typeof role !== "string" || typeof expiry !== "string" || typeof credentialId !== "string") {
+    return {
+      ok: false,
+      error: "Credential must include company, role, expiry, and credential_id or worker_id."
+    };
+  }
+
+  return {
+    ok: true,
+    credential: {
+      id: String(credentialId),
+      credentialId: String(credentialId),
+      company,
+      role,
+      expiry,
+      importedAt: new Date().toISOString(),
+      blob: normalized
+    }
+  };
+}
+
 export function loadStoredCredentials(): StoredCredential[] {
   const encrypted = localStorage.getItem(STORAGE_KEY);
   if (!encrypted) {

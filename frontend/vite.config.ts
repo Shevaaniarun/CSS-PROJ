@@ -12,6 +12,10 @@ export default defineConfig({
       components: fileURLToPath(new URL("./src/components", import.meta.url))
     }
   },
+  test: {
+    environment: "jsdom",
+    setupFiles: "./tests/setup.ts"
+  },
   server: {
     port: 3000
   }

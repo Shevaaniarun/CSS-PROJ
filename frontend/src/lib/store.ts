@@ -24,11 +24,23 @@ type AppState = {
 };
 
 export const useAppStore = create<AppState>((set) => ({
-  role: "admin",
+  role:
+    typeof window !== "undefined" &&
+    (localStorage.getItem("auth_role") === "admin" ||
+      localStorage.getItem("auth_role") === "company" ||
+      localStorage.getItem("auth_role") === "gate" ||
+      localStorage.getItem("auth_role") === "worker")
+      ? (localStorage.getItem("auth_role") as AppState["role"])
+      : "admin",
   gateId: "",
   latestQr: null,
   latestGateResult: null,
-  setRole: (role) => set({ role }),
+  setRole: (role) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("auth_role", role);
+    }
+    set({ role });
+  },
   setGateId: (gateId) => set({ gateId }),
   setLatestQr: (latestQr) => set({ latestQr }),
   setLatestGateResult: (latestGateResult) => set({ latestGateResult })

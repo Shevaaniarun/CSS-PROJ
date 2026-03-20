@@ -199,3 +199,11 @@ export function useCredentials() {
     enabled: hasToken()
   });
 }
+
+export function useCredential(credentialId?: string) {
+  return useQuery({
+    queryKey: ["company", "credentials", credentialId],
+    queryFn: () => apiClient.get<CredentialSummary>(`/company/credentials/${credentialId}`),
+    enabled: hasToken() && Boolean(credentialId)
+  });
+}

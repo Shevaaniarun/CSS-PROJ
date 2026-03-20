@@ -1,15 +1,39 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { getStoredRole, logout } from "../hooks/useAuth";
 import { useAppStore } from "../lib/store";
 
-const links = [
-  { to: "/admin", label: "Admin" },
-  { to: "/company", label: "Company" },
-  { to: "/gate", label: "Gate" },
-  { to: "/worker", label: "Worker" }
-];
+const linksByRole = {
+  admin: [
+    { to: "/admin/dashboard", label: "Dashboard" },
+    { to: "/admin/companies", label: "Companies" },
+    { to: "/admin/gates", label: "Gates" },
+    { to: "/admin/audit-logs", label: "Audit Logs" },
+    { to: "/admin/settings", label: "Settings" }
+  ],
+  company: [
+    { to: "/company", label: "Dashboard" },
+    { to: "/company/workers", label: "Workers" },
+    { to: "/company/workers/new", label: "Add Worker" },
+    { to: "/company/credentials", label: "Credentials" }
+  ],
+  gate: [
+    { to: "/gate", label: "Scanner" },
+    { to: "/gate/result", label: "Result" },
+    { to: "/gate/manual-entry", label: "Manual Entry" }
+  ],
+  worker: [
+    { to: "/worker", label: "Wallet" },
+    { to: "/worker/generate-qr", label: "Generate QR" },
+    { to: "/worker/qr-display", label: "QR Display" },
+    { to: "/worker/history", label: "History" }
+  ]
+} as const;
 
 export function AppLayout() {
   const { role, setRole } = useAppStore();
+  const navigate = useNavigate();
+  const storedRole = getStoredRole() ?? role;
+  const navLinks = linksByRole[storedRole];
 
   return (
     <div className="page-shell">
@@ -17,21 +41,22 @@ export function AppLayout() {
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-moss">Campus Privacy Auth</p>
           <h1 className="text-3xl font-semibold text-ink">Privacy-preserving delivery access</h1>
+          <p className="mt-2 text-sm text-black/60">Signed in as {storedRole}</p>
         </div>
         <div className="flex items-center gap-3">
-          {(["admin", "company", "gate", "worker"] as const).map((value) => (
-            <button
-              key={value}
-              className={`rounded-full px-4 py-2 text-sm ${role === value ? "bg-moss text-white" : "bg-white"}`}
-              onClick={() => setRole(value)}
-            >
-              {value}
-            </button>
-          ))}
+          <button
+            className="rounded-full bg-white px-4 py-2 text-sm"
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+          >
+            Logout
+          </button>
         </div>
       </header>
       <nav className="flex gap-3 overflow-auto">
-        {links.map((link) => (
+        {navLinks.map((link) => (
           <NavLink
             key={link.to}
             className={({ isActive }) =>
@@ -47,4 +72,3 @@ export function AppLayout() {
     </div>
   );
 }
-

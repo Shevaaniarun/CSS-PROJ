@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 from app.core.config import get_settings
 
 settings = get_settings()
-pwd_context = CryptContext(schemes=["bcrypt"], bcrypt__rounds=settings.bcrypt_rounds, deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], pbkdf2_sha256__rounds=29000, deprecated="auto")
 
 
 def hash_password(password: str) -> str:
@@ -28,4 +28,3 @@ def create_access_token(subject: str, role: str, extra: dict[str, Any] | None = 
     if extra:
         payload.update(extra)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-
