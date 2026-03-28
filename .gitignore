@@ -15,6 +15,7 @@ build/
 venv/
 .env/
 .env.*
+.venv
 
 # Logs
 *.log

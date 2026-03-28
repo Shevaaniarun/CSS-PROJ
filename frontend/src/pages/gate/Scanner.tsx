@@ -42,10 +42,16 @@ export function GateScanner() {
     }
     try {
       const qrData = JSON.parse(qrText) as Record<string, unknown>;
+      const receivedNonce =
+        typeof qrData.nonce === "string"
+          ? qrData.nonce
+          : typeof (qrData.message as { nonce?: unknown } | undefined)?.nonce === "string"
+            ? ((qrData.message as { nonce?: string }).nonce ?? "")
+            : "";
       const response = await gateVerify.mutateAsync({
         gate_id: gateId,
         gate_nonce: cachedNonce,
-        received_nonce: String(qrData.nonce ?? ""),
+        received_nonce: receivedNonce,
         timestamp: new Date().toISOString(),
         qr_data: qrData
       });

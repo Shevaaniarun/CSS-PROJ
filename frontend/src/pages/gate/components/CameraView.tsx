@@ -37,13 +37,58 @@ export function CameraView({ qrText, onQrTextChange, onVerify, busy }: Props) {
     }
     try {
       const scanner = new Html5Qrcode(scannerId);
-      const decodedText = await scanner.scanFile(file, true);
+      const fileToScan = file.type === "image/svg+xml" ? await rasterizeSvgToPngFile(file) : file;
+      const decodedText = await scanner.scanFile(fileToScan, true);
       onQrTextChange(decodedText);
       toast.success("QR image decoded successfully");
     } catch {
       toast.error("Could not decode a QR code from the selected image");
     } finally {
       event.target.value = "";
+    }
+  }
+
+  async function rasterizeSvgToPngFile(file: File): Promise<File> {
+    const svgText = await file.text();
+    const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("Failed to load SVG image"));
+        img.src = url;
+      });
+
+      const width = Math.max(1024, image.naturalWidth || image.width || 1024);
+      const height = Math.max(1024, image.naturalHeight || image.height || 1024);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("Canvas context unavailable");
+      }
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      const pngBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("Failed to render PNG blob"));
+            return;
+          }
+          resolve(blob);
+        }, "image/png", 1);
+      });
+
+      return new File([pngBlob], `${file.name.replace(/\.svg$/i, "") || "qr"}.png`, {
+        type: "image/png",
+      });
+    } finally {
+      URL.revokeObjectURL(url);
     }
   }
 
