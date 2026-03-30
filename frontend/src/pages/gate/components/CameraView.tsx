@@ -36,13 +36,21 @@ export function CameraView({ qrText, onQrTextChange, onVerify, busy }: Props) {
       return;
     }
     try {
+      if (file.type === "application/json" || file.name.toLowerCase().endsWith(".json")) {
+        const text = await file.text();
+        JSON.parse(text);
+        onQrTextChange(text);
+        toast.success("QR payload JSON loaded successfully");
+        return;
+      }
+
       const scanner = new Html5Qrcode(scannerId);
       const fileToScan = file.type === "image/svg+xml" ? await rasterizeSvgToPngFile(file) : file;
       const decodedText = await scanner.scanFile(fileToScan, true);
       onQrTextChange(decodedText);
       toast.success("QR image decoded successfully");
     } catch {
-      toast.error("Could not decode a QR code from the selected image");
+      toast.error("Could not decode QR/image. Upload JSON payload or paste JSON directly.");
     } finally {
       event.target.value = "";
     }
@@ -103,8 +111,8 @@ export function CameraView({ qrText, onQrTextChange, onVerify, busy }: Props) {
           {scannerReady ? "Scanner ready" : "Enable camera scanner"}
         </button>
         <label className="rounded-2xl bg-white/10 px-4 py-3 text-sm text-white">
-          Upload QR image
-          <input className="hidden" type="file" accept="image/*" onChange={handleFileChange} />
+          Upload QR image / JSON
+          <input className="hidden" type="file" accept="image/*,.json,application/json" onChange={handleFileChange} />
         </label>
       </div>
       <div id={scannerId} className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2" />

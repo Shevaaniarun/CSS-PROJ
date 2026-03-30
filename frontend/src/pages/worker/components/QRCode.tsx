@@ -5,11 +5,27 @@ type Props = {
   expiresAt?: string;
 };
 
+function buildQrReferencePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const pseudonymId = payload.pseudonym_id;
+  const nonce = (payload.message as { nonce?: unknown } | undefined)?.nonce;
+  if (typeof pseudonymId !== "string" || typeof nonce !== "string") {
+    return payload;
+  }
+  return {
+    qr_mode: "ref",
+    pseudonym_id: pseudonymId,
+    nonce,
+    fingerprint: payload.fingerprint,
+    generated_at: (payload.message as { generated_at?: unknown } | undefined)?.generated_at,
+  };
+}
+
 export function QRCodePanel({ payload, expiresAt }: Props) {
   const secondsRemaining = expiresAt
     ? Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000))
     : null;
-  const qrValue = payload ? JSON.stringify(payload) : "";
+  const qrPayload = payload ? buildQrReferencePayload(payload) : null;
+  const qrValue = qrPayload ? JSON.stringify(qrPayload) : "";
   const qrByteLength = payload ? new TextEncoder().encode(qrValue).length : 0;
   const qrLevel =
     qrByteLength <= 1200 ? "H" : qrByteLength <= 1600 ? "Q" : qrByteLength <= 2200 ? "M" : "L";
@@ -61,7 +77,7 @@ export function QRCodePanel({ payload, expiresAt }: Props) {
         )}
       </div>
       <p className="mt-4 text-xs text-black/60">
-        Fallback JSON payload (same data encoded in QR):
+        Fallback JSON payload (full object, for manual paste/testing):
       </p>
       <pre className="mt-4 overflow-auto rounded-2xl bg-black/5 p-4 text-xs">
         {payload ? JSON.stringify(payload, null, 2) : "Generate a pseudonym to display the QR payload here."}

@@ -9,7 +9,7 @@ from app.api.deps import require_gate
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.session import get_db
-from app.models.entities import Company, CompanyPublicKey, Gate, NonceTracking, RevocationList
+from app.models.entities import Company, CompanyPublicKey, Gate, NonceTracking, Pseudonym, RevocationList
 from app.repositories.gate_repo import GateRepository
 from app.schemas.auth import LoginRequest
 from app.schemas.common import MessageResponse, TokenResponse
@@ -19,6 +19,22 @@ from app.services.auth import issue_login_cookie, validate_password
 
 router = APIRouter(prefix="/gate", tags=["gate"])
 settings = get_settings()
+
+
+async def _resolve_qr_payload(qr_data: dict, db: AsyncSession) -> dict:
+    """Expand compact QR references into full pseudonym payloads."""
+    if qr_data.get("qr_mode") != "ref":
+        return qr_data
+
+    pseudonym_id = qr_data.get("pseudonym_id")
+    if not isinstance(pseudonym_id, str) or not pseudonym_id:
+        raise HTTPException(status_code=400, detail="Invalid QR reference payload")
+
+    pseudonym = await db.scalar(select(Pseudonym).where(Pseudonym.id == pseudonym_id))
+    if not pseudonym or not isinstance(pseudonym.payload, dict):
+        raise HTTPException(status_code=404, detail="Referenced pseudonym not found")
+
+    return pseudonym.payload
 
 
 @router.post("/register", response_model=MessageResponse)
@@ -77,8 +93,9 @@ async def verify_gate_access(
         raise HTTPException(status_code=403, detail="Gate mismatch")
     if gate.status != "approved":
         raise HTTPException(status_code=403, detail=f"Gate is {gate.status}")
+    expanded_qr_data = await _resolve_qr_payload(payload.qr_data, db)
     return await VerificationService(db).verify(
-        qr_data=payload.qr_data,
+        qr_data=expanded_qr_data,
         gate_id=payload.gate_id,
         gate_nonce=payload.gate_nonce,
         received_nonce=payload.received_nonce,

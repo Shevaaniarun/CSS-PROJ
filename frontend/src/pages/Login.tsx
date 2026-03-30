@@ -76,7 +76,7 @@ export function LoginPage() {
       <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="panel">
           <p className="text-xs uppercase tracking-[0.35em] text-moss">Campus Privacy Auth</p>
-          <h1 className="mt-2 text-4xl font-semibold text-ink">Privacy-preserving access login</h1>
+          <h1 className="mt-2 text-4xl font-semibold">Privacy-preserving access login</h1>
           <p className="mt-4 text-sm text-black/70">
             Sign in as admin, company, gate, or worker to enter the part of the system that matches your role.
           </p>

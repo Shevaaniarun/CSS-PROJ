@@ -7,10 +7,10 @@ import { useNavigate } from "react-router-dom";
 export function GateVerificationResult() {
   const navigate = useNavigate();
   const { latestGateResult, setLatestGateResult } = useAppStore();
-  const [seconds, setSeconds] = useState(5);
+  const [seconds, setSeconds] = useState(180);
 
   useEffect(() => {
-    setSeconds(5);
+    setSeconds(180);
     const interval = window.setInterval(() => {
       setSeconds((current) => {
         if (current <= 1) {

@@ -12,6 +12,22 @@ export function WorkerQRDisplay() {
     ? Math.max(0, Math.floor((new Date(latestQr.expiresAt).getTime() - Date.now()) / 1000))
     : 0;
   const progress = latestQr ? Math.max(0, (remainingSeconds / totalSeconds) * 100) : 0;
+
+  function downloadPayloadJson() {
+    if (!latestQr?.payload) {
+      return;
+    }
+    const blob = new Blob([JSON.stringify(latestQr.payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "worker-pseudonym-payload.json";
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+  }
+
   return (
     <section className="space-y-6">
       <PageHeader eyebrow="Worker Wallet" title="Present QR to gate" subtitle="One-time pseudonym display with countdown and refresh safeguards." />
@@ -54,6 +70,9 @@ export function WorkerQRDisplay() {
               }}
             >
               Copy QR data
+            </button>
+            <button className="rounded-full bg-black/5 px-4 py-2" onClick={downloadPayloadJson}>
+              Download payload JSON
             </button>
           </div>
         </div>
