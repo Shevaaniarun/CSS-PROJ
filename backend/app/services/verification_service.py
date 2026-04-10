@@ -143,3 +143,4 @@ class VerificationService:
             "failure_reason": None if result == "grant" else reason,
             "pseudonym_id": qr_data.get("pseudonym_id"),
         }
+ 
